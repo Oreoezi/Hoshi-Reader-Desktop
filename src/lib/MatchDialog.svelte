@@ -162,6 +162,9 @@
       {#if transcriberStatus === "unsupportedCpu"}
         <span class="text-sm text-base-content/60">Transcription requires a CPU with AVX2 and FMA.</span>
       {/if}
+      {#if transcriberStatus === "unavailable"}
+        <span class="text-sm text-base-content/60">Audio transcription is not available on this platform yet.</span>
+      {/if}
 
       {#if isWindows && useAudio}
         <div class="flex items-center justify-between gap-3">

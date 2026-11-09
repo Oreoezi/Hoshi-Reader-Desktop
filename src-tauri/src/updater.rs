@@ -4,6 +4,9 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 async fn available(app: &AppHandle) -> Result<Option<Update>, String> {
+    if std::env::var_os("FLATPAK_ID").is_some() {
+        return Ok(None);
+    }
     app.updater()
         .map_err(|error| error.to_string())?
         .check()

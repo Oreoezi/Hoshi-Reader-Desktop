@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Hoshi Reader
+Comment=Japanese EPUB reader
+Exec=hoshi-reader
+Icon=de.manhhao.hoshi
+Terminal=false
+Type=Application
+Categories=Education;Office;
+StartupNotify=true

@@ -137,6 +137,111 @@ pub fn decode(path: &Path, start: f64, end: f64, _mime: &str) -> Option<Pcm> {
     pcm
 }
 
+#[cfg(target_os = "linux")]
+pub fn decode(path: &Path, start: f64, end: f64, _mime: &str) -> Option<Pcm> {
+    use symphonia::core::audio::SampleBuffer;
+    use symphonia::core::codecs::{Decoder, DecoderOptions};
+    use symphonia::core::errors::Error;
+    use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
+    use symphonia::core::units::Time;
+
+    if !start.is_finite() || !end.is_finite() || start < 0.0 || end <= start {
+        return None;
+    }
+
+    let file = std::fs::File::open(path).ok()?;
+    let mut hint = Hint::new();
+    if let Some(extension) = path.extension().and_then(std::ffi::OsStr::to_str) {
+        hint.with_extension(extension);
+    }
+    let source = MediaSourceStream::new(Box::new(file), Default::default());
+    let probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            source,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .ok()?;
+    let mut format = probed.format;
+    let track = format.tracks().iter().find(|track| {
+        track.codec_params.channels.is_some() && track.codec_params.sample_rate.is_some()
+    })?;
+    let track_id = track.id;
+    let time_base = track.codec_params.time_base?;
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &DecoderOptions::default())
+        .ok()?;
+    if format
+        .seek(
+            SeekMode::Accurate,
+            SeekTo::Time {
+                time: Time::from(start),
+                track_id: Some(track_id),
+            },
+        )
+        .is_ok()
+    {
+        decoder.reset();
+    }
+    let mut samples = Vec::new();
+    let mut sample_rate = None;
+    let mut channels = None;
+
+    loop {
+        let packet = match format.next_packet() {
+            Ok(packet) => packet,
+            Err(Error::IoError(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
+                break;
+            }
+            Err(_) => break,
+        };
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let packet_start = packet.ts() as f64 * time_base.numer as f64 / time_base.denom as f64;
+        if packet_start >= end {
+            break;
+        }
+        let decoded = match decoder.decode(&packet) {
+            Ok(decoded) => decoded,
+            Err(Error::DecodeError(_)) => continue,
+            Err(_) => break,
+        };
+        let rate = decoded.spec().rate;
+        let channel_count = decoded.spec().channels.count();
+        if channel_count == 0 {
+            return None;
+        }
+        if sample_rate.is_some_and(|previous| previous != rate)
+            || channels.is_some_and(|previous| previous != channel_count)
+        {
+            return None;
+        }
+        sample_rate = Some(rate);
+        channels = Some(channel_count);
+
+        let first_frame = ((start - packet_start).max(0.0) * rate as f64).ceil() as usize;
+        let last_frame = ((end - packet_start).max(0.0) * rate as f64)
+            .ceil()
+            .min(decoded.frames() as f64) as usize;
+        if first_frame >= last_frame {
+            continue;
+        }
+        let mut buffer = SampleBuffer::<i16>::new(decoded.capacity() as u64, *decoded.spec());
+        buffer.copy_interleaved_ref(decoded);
+        let interleaved = buffer.samples();
+        let first_sample = first_frame * channel_count;
+        let last_sample = (last_frame * channel_count).min(interleaved.len());
+        samples.extend_from_slice(interleaved.get(first_sample..last_sample)?);
+    }
+
+    Some((samples, sample_rate?, channels?))
+}
+
 #[cfg(windows)]
 unsafe fn open_reader(
     path: &Path,

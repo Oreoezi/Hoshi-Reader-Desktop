@@ -432,7 +432,7 @@ export class SasayakiPlayer {
       this.unlistenMediaControls?.();
       this.unlistenMediaControls = null;
       invoke("media_controls_clear");
-    } else {
+    } else if (navigator.mediaSession) {
       navigator.mediaSession.metadata = null;
       for (const action in this.mediaActions) {
         navigator.mediaSession.setActionHandler(action as MediaSessionAction, null);
@@ -500,6 +500,7 @@ export class SasayakiPlayer {
       });
       return;
     }
+    if (!navigator.mediaSession) return;
     for (const [action, handler] of Object.entries(this.mediaActions)) {
       navigator.mediaSession.setActionHandler(action as MediaSessionAction, handler);
     }
@@ -523,6 +524,7 @@ export class SasayakiPlayer {
       });
       return;
     }
+    if (!navigator.mediaSession || typeof MediaMetadata === "undefined") return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: this.nowPlaying.title,
       artist: this.chapter ?? "",

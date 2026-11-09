@@ -85,3 +85,25 @@ fn text() -> Option<String> {
         text
     }
 }
+
+#[cfg(target_os = "linux")]
+static LINUX_CLIPBOARD: std::sync::LazyLock<std::sync::Mutex<(i64, Option<String>)>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new((0, None)));
+
+#[cfg(target_os = "linux")]
+fn change_count() -> i64 {
+    let current = arboard::Clipboard::new()
+        .and_then(|mut clipboard| clipboard.get_text())
+        .ok();
+    let mut cached = LINUX_CLIPBOARD.lock().unwrap();
+    if cached.1 != current {
+        cached.0 = cached.0.wrapping_add(1);
+        cached.1 = current;
+    }
+    cached.0
+}
+
+#[cfg(target_os = "linux")]
+fn text() -> Option<String> {
+    LINUX_CLIPBOARD.lock().unwrap().1.clone()
+}
