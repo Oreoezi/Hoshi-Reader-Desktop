@@ -3,7 +3,7 @@
 # Hoshi Reader Desktop
 
 ![Language](https://img.shields.io/github/languages/top/Manhhao/Hoshi-Reader-Desktop)
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/github/license/Manhhao/Hoshi-Reader-Desktop)
 
 Desktop version of [Hoshi Reader](https://github.com/Manhhao/Hoshi-Reader) and [Hoshi Reader Android](https://github.com/HuangAntimony/Hoshi-Reader-Android), made using Tauri and Svelte.
@@ -22,7 +22,9 @@ Desktop version of [Hoshi Reader](https://github.com/Manhhao/Hoshi-Reader) and [
 
 [![Download](https://img.shields.io/github/v/release/Manhhao/Hoshi-Reader-Desktop?label=Download&style=for-the-badge&logo=github&color=5283f7)](https://github.com/Manhhao/Hoshi-Reader-Desktop/releases/latest)
 
-Download the `.dmg` for macOS 15+ (Apple Silicon) or the `-setup.exe` for Windows.
+Download the `.dmg` for macOS 15+ (Apple Silicon), the `-setup.exe` for Windows, or the `.AppImage` for Linux.
+
+Make the AppImage executable with `chmod +x Hoshi*.AppImage` before launching it.
 
 ## Features
 
@@ -45,6 +47,13 @@ Download the `.dmg` for macOS 15+ (Apple Silicon) or the `-setup.exe` for Window
 - A C++23 compiler
   - macOS: Xcode Command Line Tools
   - Windows: Visual Studio with *Desktop development with C++ workload* and *C++ Clang tools for Windows*
+  - Linux: GCC or Clang, plus GTK 3 and WebKitGTK 4.1 development files
+
+On Ubuntu 24.04+ or a recent Debian release, install the Tauri build dependencies with:
+
+```sh
+sudo apt install build-essential cmake file gstreamer1.0-libav gstreamer1.0-plugins-bad gstreamer1.0-plugins-good libayatana-appindicator3-dev libssl-dev libwebkit2gtk-4.1-dev librsvg2-dev libxdo-dev patchelf pkg-config
+```
 
 ### Run
 
@@ -62,6 +71,8 @@ pnpm tauri build --no-sign --config '{"bundle":{"createUpdaterArtifacts":false}}
 ```
 
 To enable Google Drive sync, set `HOSHI_GOOGLE_CLIENT_ID` and `HOSHI_GOOGLE_CLIENT_SECRET` from your own Google Cloud project before building.
+
+Linux audio transcription is not currently supported; the Linux build still supports Sasayaki audio clips for Anki cards.
 
 ## Contributing
 

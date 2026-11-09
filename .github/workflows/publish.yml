@@ -2,8 +2,14 @@ name: 'publish'
 
 on:
   push:
+    branches:
+      - 'linux-appimage'
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - 'main'
+  workflow_dispatch:
 
 jobs:
   publish-tauri:
@@ -17,28 +23,79 @@ jobs:
             args: '--target aarch64-apple-darwin'
           - platform: 'windows-latest'
             args: '--bundles nsis'
+          - platform: 'ubuntu-24.04'
+            args: '--bundles appimage'
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
 
+      - name: install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            cmake \
+            curl \
+            dbus-x11 \
+            file \
+            gcc-12 \
+            g++-12 \
+            gstreamer1.0-libav \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-plugins-good \
+            libayatana-appindicator3-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf \
+            pkg-config \
+            xvfb \
+            wget
+
+      - name: setup CMake
+        if: runner.os == 'Linux'
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.31.x'
+
+      - name: select C++23 compiler
+        if: runner.os == 'Linux'
+        run: |
+          echo "CC=gcc-12" >> "$GITHUB_ENV"
+          echo "CXX=g++-12" >> "$GITHUB_ENV"
+
       - name: setup pnpm
+        if: runner.os == 'Linux' || startsWith(github.ref, 'refs/tags/')
         uses: pnpm/action-setup@v6
 
       - name: setup node
+        if: runner.os == 'Linux' || startsWith(github.ref, 'refs/tags/')
         uses: actions/setup-node@v7
         with:
           node-version: lts/*
 
       - name: install Rust stable
+        if: runner.os == 'Linux' || startsWith(github.ref, 'refs/tags/')
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: install frontend dependencies
+        if: runner.os == 'Linux' || startsWith(github.ref, 'refs/tags/')
         run: pnpm install --frozen-lockfile
 
+      - name: build Linux AppImage for CI
+        if: runner.os == 'Linux' && !startsWith(github.ref, 'refs/tags/')
+        run: pnpm tauri build --no-sign --config '{"bundle":{"createUpdaterArtifacts":false}}' --bundles appimage
+        env:
+          HOSHI_GOOGLE_CLIENT_ID: ${{ secrets.HOSHI_GOOGLE_CLIENT_ID }}
+          HOSHI_GOOGLE_CLIENT_SECRET: ${{ secrets.HOSHI_GOOGLE_CLIENT_SECRET }}
+
       - uses: tauri-apps/tauri-action@v1
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
@@ -57,3 +114,22 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: smoke-test AppImage
+        if: runner.os == 'Linux'
+        run: |
+          set +e
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a dbus-run-session -- timeout 20s src-tauri/target/release/bundle/appimage/*.AppImage
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+            exit "$status"
+          fi
+
+      - name: upload AppImage test artifact
+        if: runner.os == 'Linux' && !startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoshi-reader-appimage
+          path: src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error

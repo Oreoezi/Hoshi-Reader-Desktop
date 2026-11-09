@@ -16,6 +16,9 @@ mod backend;
 #[cfg(windows)]
 #[path = "transcriber/nakuru.rs"]
 mod backend;
+#[cfg(not(any(target_os = "macos", windows)))]
+#[path = "transcriber/unsupported.rs"]
+mod backend;
 
 const TRANSCRIPT_FILE: &str = "sasayaki_transcript.json";
 
